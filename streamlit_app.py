@@ -3,24 +3,32 @@ import subprocess
 import os
 import configparser
 
-# --- UI: Credentials ---
+st.set_page_config(page_title="AFL Replay Downloader")
+
 st.title("AFL Replay Downloader")
 
+# Step 1: Credentials
 if "creds_set" not in st.session_state:
     st.subheader("Step 1: Enter AFL Login")
-    st.session_state.username = st.text_input("AFL Username/Email", key="username")
-    st.session_state.password = st.text_input("AFL Password", type="password", key="password")
+
+    # These two calls automatically store inputs in session_state["username"] and ["password"]
+    st.text_input("AFL Username/Email", key="username")
+    st.text_input("AFL Password", type="password", key="password")
+
     if st.button("Save Credentials"):
-        # write config.ini
+        # Read them back from session_state
+        username = st.session_state.username
+        password = st.session_state.password
+
+        # Build config.ini
         cfg = configparser.ConfigParser()
         cfg['afl'] = {
-            'username': st.session_state.username,
+            'username': username,
             'password_key': 'AFL_PW'
         }
-        # you can edit these defaults or pull from config.ini.example
         cfg['paths'] = {
-            'download_folder': 'C:\\AFL_Replays',
-            'log_file':      'C:\\AFL_Replays\\download_log.txt'
+            'download_folder': r'C:\AFL_Replays',
+            'log_file':       r'C:\AFL_Replays\download_log.txt'
         }
         cfg['email'] = {
             'smtp_server': 'smtp.example.com',
@@ -30,39 +38,49 @@ if "creds_set" not in st.session_state:
             'subject':      'New AFL Replay Downloaded'
         }
         cfg['sync'] = {
-            'syncthing_folder': 'C:\\AFL_Replays'
+            'syncthing_folder': r'C:\AFL_Replays'
         }
 
         with open('config.ini', 'w') as f:
             cfg.write(f)
 
-        # store password in keyring
-        subprocess.run([
-            "python", "credential_manager.py", st.session_state.password
-        ], check=True)
+        # Store password securely
+        subprocess.run(
+            ["python", "credential_manager.py", password],
+            check=True
+        )
 
         st.success("Credentials saved to config.ini and keyring.")
         st.session_state.creds_set = True
 
-# --- UI: Date picker & Download ---
+# Step 2: Download UI
 if "creds_set" in st.session_state:
     st.subheader("Step 2: Download Replays")
-    date = st.date_input("Select date to download", )
+
+    # Date picker
+    selected_date = st.date_input("Select date to download")
+
     if st.button("Download Replays"):
-        # call downloader with --date
+        # Call downloader.py with --date argument
         cmd = [
             "python", "downloader.py",
-            "--date", date.strftime("%Y-%m-%d")
+            "--date", selected_date.strftime("%Y-%m-%d")
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        st.text(result.stdout or result.stderr)
+        process = subprocess.run(cmd, capture_output=True, text=True)
+        # Show stdout or stderr
+        st.text(process.stdout or process.stderr)
 
-    # list existing files for quick download
-    dl_folder = os.path.expandvars("C:\\AFL_Replays")
+    # Show already-downloaded files as download buttons
+    dl_folder = r"C:\AFL_Replays"
     if os.path.isdir(dl_folder):
         st.subheader("Downloaded Replays")
         for fname in sorted(os.listdir(dl_folder)):
-            path = os.path.join(dl_folder, fname)
-            with open(path, "rb") as fp:
+            file_path = os.path.join(dl_folder, fname)
+            with open(file_path, "rb") as fp:
                 data = fp.read()
-            st.download_button(fname, data, file_name=fname)
+            st.download_button(
+                label=fname,
+                data=data,
+                file_name=fname,
+                mime="video/mp4"
+            )
