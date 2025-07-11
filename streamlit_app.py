@@ -1,5 +1,6 @@
 import streamlit as st
 import subprocess
+import sys
 import os
 import configparser
 
@@ -44,15 +45,20 @@ if "creds_set" in st.session_state:
     selected_date = st.date_input("Select date to download")
 
     if st.button("Download Replays"):
-        cmd = f"python downloader.py --date {selected_date.strftime('%Y-%m-%d')}"
-        # Run and capture output
-        logs = subprocess.getoutput(cmd)
-        st.text_area("Logs", logs, height=300)
+        # Use same Python interpreter as Streamlit
+        python_exe = sys.executable
+        cmd = [
+            python_exe, "downloader.py",
+            "--date", selected_date.strftime("%Y-%m-%d")
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        st.text_area("Logs", result.stdout + result.stderr, height=300)
 
     # Show downloaded files
-    if os.path.isdir("./AFL_Replays"):
+    dl_dir = "./AFL_Replays"
+    if os.path.isdir(dl_dir):
         st.subheader("Downloaded Replays")
-        for fname in sorted(os.listdir("./AFL_Replays")):
-            path = os.path.join("./AFL_Replays", fname)
+        for fname in sorted(os.listdir(dl_dir)):
+            path = os.path.join(dl_dir, fname)
             with open(path, "rb") as fp:
-                st.download_button(fname, fp.read(), file_name=fname, mime="video/mp4")
+                st.download_button(label=fname, data=fp.read(), file_name=fname, mime="video/mp4")
