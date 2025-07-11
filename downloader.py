@@ -1,4 +1,8 @@
-import argparse, os, configparser, datetime, sys
+import argparse
+import os
+import configparser
+import datetime
+import sys
 import requests
 from bs4 import BeautifulSoup
 
@@ -14,9 +18,9 @@ cfg.read('config.ini')
 DL_PATH  = cfg['paths']['download_folder']
 LOG_FILE = cfg['paths']['log_file']
 USER     = cfg['afl']['username']
-PASSWORD = cfg['afl'].get('password')  # plain-text in config for Streamlit
+PASSWORD = cfg['afl'].get('password') or None
 
-# Debug prints
+# Debug info
 print(f"Working dir        = {os.getcwd()}")
 print(f"Download folder    = {DL_PATH}")
 print(f"Log file           = {LOG_FILE}")
@@ -27,14 +31,14 @@ if not os.path.isdir(DL_PATH):
     print(f"Creating folder: {DL_PATH}")
     os.makedirs(DL_PATH, exist_ok=True)
 
-# Start session and login
+# Login
 session = requests.Session()
 print("Logging in…")
-resp = session.post(
+auth = session.post(
     "https://www.afl.com.au/login/authenticate",
     data={"username": USER, "password": PASSWORD}
 )
-print(f"Login response     = {resp.status_code}")
+print(f"Login response     = {auth.status_code}")
 
 # Scrape replay links
 matches_url = f"https://www.afl.com.au/matches?date={date_str}"
@@ -51,7 +55,7 @@ if not links:
 
 print(f"Found {len(links)} link(s).")
 
-# Load existing log
+# Load download log
 downloaded = set()
 if os.path.isfile(LOG_FILE):
     with open(LOG_FILE) as f:
