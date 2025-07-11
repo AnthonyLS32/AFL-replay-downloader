@@ -1,4 +1,5 @@
 import streamlit as st
+import subprocess
 import os
 import configparser
 
@@ -8,22 +9,19 @@ st.title("AFL Replay Downloader")
 # Step 1: Credentials
 if "creds_set" not in st.session_state:
     st.subheader("Step 1: Enter AFL Login")
-    st.text_input("AFL Username/Email", key="username")
-    st.text_input("AFL Password", type="password", key="password")
+    st.text_input("Username/Email", key="username")
+    st.text_input("Password", type="password", key="password")
 
     if st.button("Save Credentials"):
-        username = st.session_state.username
-        password = st.session_state.password
-
         cfg = configparser.ConfigParser()
-        cfg['afl'] = {
-            'username':     username,
-            'password':     password,
-            'password_key': 'AFL_PW'
-        }
         cfg['paths'] = {
-            'download_folder': r'C:\AFL_Replays',
-            'log_file':        r'C:\AFL_Replays\download_log.txt'
+            'download_folder': './AFL_Replays',
+            'log_file':        './AFL_Replays/download_log.txt'
+        }
+        cfg['afl'] = {
+            'username':     st.session_state.username,
+            'password':     st.session_state.password,
+            'password_key': 'AFL_PW'
         }
         cfg['email'] = {
             'smtp_server': 'smtp.example.com',
@@ -32,14 +30,12 @@ if "creds_set" not in st.session_state:
             'to_addr':     'anthonylasala@hotmail.com',
             'subject':     'New AFL Replay Downloaded'
         }
-        cfg['sync'] = {
-            'syncthing_folder': r'C:\AFL_Replays'
-        }
+        cfg['sync'] = {'syncthing_folder': './AFL_Replays'}
 
         with open('config.ini', 'w') as f:
             cfg.write(f)
 
-        st.success("Credentials saved to config.ini.")
+        st.success("config.ini saved.")
         st.session_state.creds_set = True
 
 # Step 2: Download UI
@@ -48,19 +44,15 @@ if "creds_set" in st.session_state:
     selected_date = st.date_input("Select date to download")
 
     if st.button("Download Replays"):
-        # Run downloader.py and show its output
-        cmd = [
-            "python", "downloader.py",
-            "--date", selected_date.strftime("%Y-%m-%d")
-        ]
-        result = os.popen(" ".join(cmd)).read()
-        st.text(result)
+        cmd = f"python downloader.py --date {selected_date.strftime('%Y-%m-%d')}"
+        # Run and capture output
+        logs = subprocess.getoutput(cmd)
+        st.text_area("Logs", logs, height=300)
 
-    # List and serve downloaded files
-    dl_folder = r"C:\AFL_Replays"
-    if os.path.isdir(dl_folder):
+    # Show downloaded files
+    if os.path.isdir("./AFL_Replays"):
         st.subheader("Downloaded Replays")
-        for fname in sorted(os.listdir(dl_folder)):
-            path = os.path.join(dl_folder, fname)
+        for fname in sorted(os.listdir("./AFL_Replays")):
+            path = os.path.join("./AFL_Replays", fname)
             with open(path, "rb") as fp:
-                st.download_button(label=fname, data=fp, file_name=fname, mime="video/mp4")
+                st.download_button(fname, fp.read(), file_name=fname, mime="video/mp4")
