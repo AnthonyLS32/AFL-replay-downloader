@@ -6,27 +6,18 @@ import datetime
 import keyring
 from bs4 import BeautifulSoup
 
-# --- CLI args ---
+# CLI args
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--date",
-    help="Date to download replays (YYYY-MM-DD). Defaults to today.",
-    required=False,
-)
+parser.add_argument("--date", help="YYYY-MM-DD", required=False)
 args = parser.parse_args()
+date_str = args.date or datetime.date.today().strftime("%Y-%m-%d")
 
-# pick date
-if args.date:
-    date_str = args.date
-else:
-    date_str = datetime.date.today().strftime("%Y-%m-%d")
-
-# --- Load config ---
+# Load config
 cfg = configparser.ConfigParser()
 cfg.read('config.ini')
 
 USER     = cfg['afl']['username']
-PW_KEY   = cfg['afl']['password_key']
+PASSWORD = cfg['afl'].get('password') or keyring.get_password(cfg['afl']['password_key'], 'user')
 DL_PATH  = cfg['paths']['download_folder']
 LOG_FILE = cfg['paths']['log_file']
 
@@ -36,70 +27,55 @@ print(f"[DEBUG] Download dir = {DL_PATH!r}")
 print(f"[DEBUG] Log file     = {LOG_FILE!r}")
 print(f"[DEBUG] CWD          = {os.getcwd()}")
 
-# ensure folder exists
+# Ensure folder exists
 if not os.path.isdir(DL_PATH):
     print(f"[DEBUG] Creating folder: {DL_PATH}")
     os.makedirs(DL_PATH, exist_ok=True)
 
-# retrieve password
-password = keyring.get_password(PW_KEY, 'user')
-if not password:
-    raise RuntimeError("Password not found in keyring. Run credential_manager.py first.")
-print("[DEBUG] Retrieved password from keyring")
+# Verify password
+if not PASSWORD:
+    raise RuntimeError("No password found. Add 'password' in config.ini or use keyring.")
 
-# login
+# Login
 session = requests.Session()
-print("[DEBUG] Fetching login page…")
-lp = session.get("https://www.afl.com.au/login")
-print(f"[DEBUG] Login page status = {lp.status_code}")
+session.get("https://www.afl.com.au/login")
+session.post("https://www.afl.com.au/login/authenticate", data={"username": USER, "password": PASSWORD})
+print("[DEBUG] Logged in")
 
-payload = {"username": USER, "password": password}
-auth = session.post("https://www.afl.com.au/login/authenticate", data=payload)
-print(f"[DEBUG] Auth response status = {auth.status_code}")
-
-# scrape
+# Scrape replay links
 matches_url = f"https://www.afl.com.au/matches?date={date_str}"
 print(f"[DEBUG] Scraping: {matches_url}")
 r = session.get(matches_url)
-print(f"[DEBUG] Page status = {r.status_code}")
-
-soup = BeautifulSoup(r.text, "html.parser")
-links = [a['href'] for a in soup.select("a.replay-link")]
+links = [a['href'] for a in BeautifulSoup(r.text, "html.parser").select("a.replay-link")]
 
 if not links:
-    print("[WARN] No replay links found. Check the date or selector.")
+    print("[WARN] No replay links found.")
     exit()
 
-print(f"[DEBUG] Found {len(links)} replay link(s).")
-
-# load downloaded log
+# Load download log
 downloaded = set()
 if os.path.isfile(LOG_FILE):
     with open(LOG_FILE) as f:
         downloaded = set(l.strip() for l in f)
 
-# download each
+# Download loop
 with open(LOG_FILE, "a") as log:
     for rel in links:
         fname = rel.split("/")[-1] + ".mp4"
         dest  = os.path.join(DL_PATH, fname)
-
         if fname in downloaded:
-            print(f"[SKIP] {fname} already downloaded.")
+            print(f"[SKIP] {fname}")
             continue
 
         file_url = f"https://www.afl.com.au{rel}"
         print(f"[DOWNLOAD] {file_url}")
         stream = session.get(file_url, stream=True)
-        print(f"[DEBUG] Stream status = {stream.status_code}")
-
         if stream.status_code != 200:
-            print(f"[ERROR] Failed to download {fname}")
+            print(f"[ERROR] Failed {fname}")
             continue
 
         with open(dest, "wb") as f_out:
             for chunk in stream.iter_content(1024*1024):
                 f_out.write(chunk)
-
         log.write(fname + "\n")
-        print(f"[DONE] Downloaded {fname}")
+        print(f"[DONE] {fname}")
