@@ -1,0 +1,17 @@
+[afl]
+username = your_afl_username
+password_key = AFL_PW
+
+[paths]
+download_folder = C:\AFL_Replays
+log_file = C:\AFL_Replays\download_log.txt
+
+[email]
+smtp_server = smtp.example.com
+smtp_port = 587
+from_addr = your.email@example.com
+to_addr = anthonylasala@hotmail.com
+subject = "New AFL Replay Downloaded"
+
+[sync]
+syncthing_folder = C:\AFL_Replays
