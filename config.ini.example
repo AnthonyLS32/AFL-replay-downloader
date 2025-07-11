@@ -1,11 +1,11 @@
-[afl]
-username      = your_afl_username
-password      = your_afl_password  # add your AFL password here if running on Streamlit
-password_key  = AFL_PW              # still used if you prefer Keyring locally
-
 [paths]
-download_folder = C:\AFL_Replays
-log_file        = C:\AFL_Replays\download_log.txt
+download_folder = ./AFL_Replays
+log_file        = ./AFL_Replays/download_log.txt
+
+[afl]
+username     = your_afl_username
+password     = your_afl_password
+password_key = AFL_PW
 
 [email]
 smtp_server = smtp.example.com
@@ -15,4 +15,4 @@ to_addr     = anthonylasala@hotmail.com
 subject     = New AFL Replay Downloaded
 
 [sync]
-syncthing_folder = C:\AFL_Replays
+syncthing_folder = ./AFL_Replays
