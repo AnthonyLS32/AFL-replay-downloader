@@ -39,3 +39,27 @@ if st.button("Download This Replay"):
             st.success("✅ Download complete!")
         except Exception as e:
             st.error(f"❌ Download failed: {e}")
+
+import os
+
+st.markdown("---")
+st.subheader("Downloaded Replays")
+
+DL_DIR = "./AFL_Replays"
+if os.path.isdir(DL_DIR):
+    files = sorted(os.listdir(DL_DIR))
+    if not files:
+        st.info("No files downloaded yet.")
+    else:
+        for fname in files:
+            fpath = os.path.join(DL_DIR, fname)
+            if os.path.isfile(fpath):
+                with open(fpath, "rb") as fp:
+                    st.download_button(
+                        label=f"⬇️ Download {fname}",
+                        data=fp.read(),
+                        file_name=fname,
+                        mime="video/mp4"
+                    )
+else:
+    st.warning("AFL_Replays folder does not exist yet."
