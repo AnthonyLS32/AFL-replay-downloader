@@ -1,12 +1,10 @@
 import streamlit as st
 import yt_dlp
-import requests
-import io
 import os
 import json
 
-st.set_page_config(page_title="AFL Replay Micro-Test")
-st.title("Single Replay Micro-Test")
+st.set_page_config(page_title="AFL Replay Custom Download")
+st.title("Single Replay Micro-Test with Custom Save Folder")
 
 # Known replay info
 video = {
@@ -18,15 +16,27 @@ video = {
     "url": "https://www.afl.com.au/video/1362116/match-replay-gold-coast-v-collingwood"
 }
 
-DL_DIR = "./AFL_Replays"
-os.makedirs(DL_DIR, exist_ok=True)
+# --- Custom folder input ---
+st.markdown("### 📁 Choose Save Folder")
+save_path = st.text_input(
+    "Enter your full save path (e.g. /Users/anthony/OneDrive/AFL_Replays)",
+    value="./AFL_Replays"
+)
+st.text(f"Save location: {save_path}")
 
-# --- Preview Tile ---
+# --- Make folder if needed ---
+if not os.path.exists(save_path):
+    try:
+        os.makedirs(save_path)
+    except Exception as e:
+        st.warning(f"⚠️ Could not create folder: {e}")
+
+# --- Preview Replay ---
 st.image(video["thumbnail"], caption=f"{video['title']} ({video['duration']})")
 st.write(f"📄 **Title**: {video['title']}")
 st.write(f"🔗 [Replay Link]({video['url']})")
 
-# --- Metadata Dry Run ---
+# --- Dry Run Metadata Preview ---
 st.markdown("### ▶️ Pre-Download Metadata Check")
 try:
     with yt_dlp.YoutubeDL({"quiet": False}) as ydl:
@@ -38,43 +48,43 @@ try:
         for fmt in info["formats"][:5]:
             st.write(f"- {fmt.get('format_id')}: {fmt.get('ext')} @ {fmt.get('height')}p")
     else:
-        st.warning("No formats found — this may be why download isn’t working.")
+        st.warning("No formats found.")
 
     st.text(f"Extractor: {info.get('_type')} | Title: {info.get('title')}")
 except Exception as e:
     st.error("❌ Metadata extraction failed.")
     st.text(str(e))
 
-# --- Triggered Download ---
+# --- Download Button ---
 if st.button("⬇️ Download This Replay"):
     ydl_opts = {
-        "outtmpl": os.path.join(DL_DIR, f"{video['title']}.%(ext)s"),
+        "outtmpl": os.path.join(save_path, f"{video['title']}.%(ext)s"),
         "format": "bestvideo+bestaudio/best",
         "quiet": True,
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            st.info("Downloading…")
+            st.info("Downloading… please wait.")
             ydl.download([video["url"]])
         st.success("✅ Download complete!")
     except Exception as e:
         st.error("❌ Download failed.")
         st.text(str(e))
 
-# --- Show Downloaded Files ---
+# --- List Downloaded Files ---
 st.markdown("---")
 st.subheader("Downloaded Replays")
 
-if os.path.isdir(DL_DIR):
-    files = sorted(os.listdir(DL_DIR))
+if os.path.isdir(save_path):
+    files = sorted(os.listdir(save_path))
     st.text(f"📁 Folder contains: {files}")
 
     if not files:
         st.info("No files downloaded yet.")
     else:
         for fname in files:
-            fpath = os.path.join(DL_DIR, fname)
+            fpath = os.path.join(save_path, fname)
             if os.path.isfile(fpath):
                 with open(fpath, "rb") as fp:
                     st.download_button(
@@ -84,4 +94,4 @@ if os.path.isdir(DL_DIR):
                         mime="video/mp4"
                     )
 else:
-    st.warning("AFL_Replays folder does not exist.")
+    st.warning("The folder does not exist.")
