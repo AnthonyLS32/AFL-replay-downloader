@@ -17,16 +17,16 @@ def parse_duration(text):
         return 0
     return h * 3600 + m * 60 + s
 
-# --- CLI args ---
-p = argparse.ArgumentParser()
-p.add_argument("--date", help="Label date (YYYY-MM-DD)", required=False)
-p.add_argument("--limit", type=int, default=100, help="How many videos to fetch")
-args = p.parse_args()
+# CLI args
+parser = argparse.ArgumentParser()
+parser.add_argument("--date", help="Label date (YYYY-MM-DD)", required=False)
+parser.add_argument("--limit", type=int, default=100, help="How many videos to fetch")
+args = parser.parse_args()
 
 label_date = args.date or datetime.date.today().strftime("%Y-%m-%d")
 limit      = args.limit
 
-# --- Paths & Setup ---
+# Prepare download folder
 DL_PATH = "./AFL_Replays"
 os.makedirs(DL_PATH, exist_ok=True)
 log_file = os.path.join(DL_PATH, "download_log.txt")
@@ -35,7 +35,7 @@ print(f"Label date       = {label_date}")
 print(f"Fetch limit      = {limit}")
 print(f"Download folder  = {DL_PATH}")
 
-# --- Fetch Latest Videos Listing ---
+# Fetch latest videos listing
 listing_url = f"https://www.afl.com.au/video?limit={limit}"
 print(f"\n→ GET {listing_url}")
 resp = requests.get(listing_url, headers={"User-Agent":"Mozilla/5.0"})
@@ -45,28 +45,25 @@ if resp.status_code != 200:
 
 soup = BeautifulSoup(resp.text, "html.parser")
 
-# --- Collect tiles with duration and link ---
+# Collect tiles with duration ≥1 hour
 candidates = []
 for tile in soup.select("a[href]"):
-    # Find duration text sibling or child
-    # e.g. <span class="video-item__duration">2:11:08</span>
     dur_el = tile.select_one(".video-item__duration")
     if not dur_el:
         continue
     dur_text = dur_el.get_text(strip=True)
     secs = parse_duration(dur_text)
-    # Keep only ≥ 1 hour
     if secs >= 3600:
         href = tile["href"]
         full_url = href if href.startswith("http") else "https://www.afl.com.au" + href
         candidates.append((dur_text, full_url))
 
-print(f"Found {len(candidates)} videos ≥ 1 hour from latest {limit} items.")
+print(f"Found {len(candidates)} videos ≥ 1 hour out of {limit} items.")
 
 if not candidates:
     sys.exit("No replays ≥ 1 hour found.")
 
-# --- Download via yt-dlp ---
+# Download each via yt-dlp
 ydl_opts = {
     "outtmpl": os.path.join(DL_PATH, f"{label_date} - %(title)s.%(ext)s"),
     "format":  "bestvideo+bestaudio/best",
