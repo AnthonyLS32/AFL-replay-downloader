@@ -26,9 +26,27 @@ st.image(video["thumbnail"], caption=f"{video['title']} ({video['duration']})")
 st.write(f"📄 **Title**: {video['title']}")
 st.write(f"🔗 [Replay Link]({video['url']})")
 
-if st.button("Download This Replay"):
-    st.info("Starting download… this may take a few minutes.")
+# --- Metadata Dry Run ---
+st.markdown("### ▶️ Pre-Download Metadata Check")
+try:
+    with yt_dlp.YoutubeDL({"quiet": False}) as ydl:
+        info = ydl.extract_info(video["url"], download=False)
+    st.success("Metadata extracted!")
 
+    if "formats" in info and info["formats"]:
+        st.info(f"Found {len(info['formats'])} formats.")
+        for fmt in info["formats"][:5]:
+            st.write(f"- {fmt.get('format_id')}: {fmt.get('ext')} @ {fmt.get('height')}p")
+    else:
+        st.warning("No formats found — this may be why download isn’t working.")
+
+    st.text(f"Extractor: {info.get('_type')} | Title: {info.get('title')}")
+except Exception as e:
+    st.error("❌ Metadata extraction failed.")
+    st.text(str(e))
+
+# --- Triggered Download ---
+if st.button("⬇️ Download This Replay"):
     ydl_opts = {
         "outtmpl": os.path.join(DL_DIR, f"{video['title']}.%(ext)s"),
         "format": "bestvideo+bestaudio/best",
@@ -37,23 +55,14 @@ if st.button("Download This Replay"):
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            st.info("Downloading…")
             ydl.download([video["url"]])
         st.success("✅ Download complete!")
     except Exception as e:
         st.error("❌ Download failed.")
         st.text(str(e))
 
-# --- Show Metadata Before Download ---
-if st.checkbox("Show video metadata from yt-dlp (dry run)"):
-    try:
-        with yt_dlp.YoutubeDL({"quiet": False}) as ydl:
-            info = ydl.extract_info(video["url"], download=False)
-        st.json(info)
-    except Exception as e:
-        st.error("❌ Metadata extraction failed.")
-        st.text(str(e))
-
-# --- File Browser ---
+# --- Show Downloaded Files ---
 st.markdown("---")
 st.subheader("Downloaded Replays")
 
@@ -69,7 +78,7 @@ if os.path.isdir(DL_DIR):
             if os.path.isfile(fpath):
                 with open(fpath, "rb") as fp:
                     st.download_button(
-                        label=f"⬇️ Download {fname}",
+                        label=f"⬇️ {fname}",
                         data=fp.read(),
                         file_name=fname,
                         mime="video/mp4"
