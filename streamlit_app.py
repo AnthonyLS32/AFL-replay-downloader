@@ -39,7 +39,6 @@ if st.button("Download This Replay"):
             st.success("✅ Download complete!")
         except Exception as e:
             st.error(f"❌ Download failed: {e}")
-
 import os
 
 st.markdown("---")
