@@ -3,11 +3,12 @@ import yt_dlp
 import requests
 import io
 import os
+import json
 
 st.set_page_config(page_title="AFL Replay Micro-Test")
 st.title("Single Replay Micro-Test")
 
-# Static known video
+# Known replay info
 video = {
     "id": "1362116",
     "slug": "match-replay-gold-coast-v-collingwood",
@@ -20,12 +21,13 @@ video = {
 DL_DIR = "./AFL_Replays"
 os.makedirs(DL_DIR, exist_ok=True)
 
+# --- Preview Tile ---
 st.image(video["thumbnail"], caption=f"{video['title']} ({video['duration']})")
 st.write(f"📄 **Title**: {video['title']}")
 st.write(f"🔗 [Replay Link]({video['url']})")
 
 if st.button("Download This Replay"):
-    st.info("Downloading via yt-dlp…")
+    st.info("Starting download… this may take a few minutes.")
 
     ydl_opts = {
         "outtmpl": os.path.join(DL_DIR, f"{video['title']}.%(ext)s"),
@@ -33,20 +35,32 @@ if st.button("Download This Replay"):
         "quiet": True,
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video["url"]])
-            st.success("✅ Download complete!")
-        except Exception as e:
-            st.error(f"❌ Download failed: {e}")
-import os
+        st.success("✅ Download complete!")
+    except Exception as e:
+        st.error("❌ Download failed.")
+        st.text(str(e))
 
+# --- Show Metadata Before Download ---
+if st.checkbox("Show video metadata from yt-dlp (dry run)"):
+    try:
+        with yt_dlp.YoutubeDL({"quiet": False}) as ydl:
+            info = ydl.extract_info(video["url"], download=False)
+        st.json(info)
+    except Exception as e:
+        st.error("❌ Metadata extraction failed.")
+        st.text(str(e))
+
+# --- File Browser ---
 st.markdown("---")
 st.subheader("Downloaded Replays")
 
-DL_DIR = "./AFL_Replays"
 if os.path.isdir(DL_DIR):
     files = sorted(os.listdir(DL_DIR))
+    st.text(f"📁 Folder contains: {files}")
+
     if not files:
         st.info("No files downloaded yet.")
     else:
@@ -61,4 +75,4 @@ if os.path.isdir(DL_DIR):
                         mime="video/mp4"
                     )
 else:
-    st.warning("AFL_Replays folder does not exist yet."
+    st.warning("AFL_Replays folder does not exist.")
