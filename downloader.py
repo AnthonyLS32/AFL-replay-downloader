@@ -1,72 +1,80 @@
 import argparse
 import datetime
 import os
-import re
 import sys
 import requests
 from bs4 import BeautifulSoup
 import yt_dlp
 
-# 1. CLI args
-parser = argparse.ArgumentParser()
-parser.add_argument("--date", help="YYYY-MM-DD (defaults today)", required=False)
-args = parser.parse_args()
+def parse_duration(text):
+    """Convert 'HH:MM:SS' or 'MM:SS' → seconds."""
+    parts = list(map(int, text.split(":")))
+    if len(parts) == 3:
+        h, m, s = parts
+    elif len(parts) == 2:
+        h, m, s = 0, parts[0], parts[1]
+    else:
+        return 0
+    return h * 3600 + m * 60 + s
 
-target_date = (
-    args.date
-    or datetime.date.today().strftime("%Y-%m-%d")
-)
-print(f"Target date = {target_date}")
+# --- CLI args ---
+p = argparse.ArgumentParser()
+p.add_argument("--date", help="Label date (YYYY-MM-DD)", required=False)
+p.add_argument("--limit", type=int, default=100, help="How many videos to fetch")
+args = p.parse_args()
 
-# 2. Prepare download folder
+label_date = args.date or datetime.date.today().strftime("%Y-%m-%d")
+limit      = args.limit
+
+# --- Paths & Setup ---
 DL_PATH = "./AFL_Replays"
 os.makedirs(DL_PATH, exist_ok=True)
-print(f"Download folder = {DL_PATH}")
+log_file = os.path.join(DL_PATH, "download_log.txt")
 
-# 3. Fetch the Match Replays listing
-LISTING_URL = (
-    "https://www.afl.com.au/video?"
-    "tagNames=ProgramCategory%3AMatch%20Replays&limit=100"
-)
-print(f"\n→ GET {LISTING_URL}")
-resp = requests.get(LISTING_URL, headers={"User-Agent":"Mozilla/5.0"})
+print(f"Label date       = {label_date}")
+print(f"Fetch limit      = {limit}")
+print(f"Download folder  = {DL_PATH}")
+
+# --- Fetch Latest Videos Listing ---
+listing_url = f"https://www.afl.com.au/video?limit={limit}"
+print(f"\n→ GET {listing_url}")
+resp = requests.get(listing_url, headers={"User-Agent":"Mozilla/5.0"})
 print(f"Status = {resp.status_code}")
 if resp.status_code != 200:
-    sys.exit("Failed to fetch Match Replays listing.")
+    sys.exit("ERROR: Cannot fetch video listing.")
 
 soup = BeautifulSoup(resp.text, "html.parser")
 
-# 4. Extract replay links + publishFrom timestamp
-pattern = re.compile(r"/video/\d+/match-replay-[^?]+\?.*publishFrom=(\d+)")
+# --- Collect tiles with duration and link ---
 candidates = []
-for a in soup.find_all("a", href=True):
-    m = pattern.search(a["href"])
-    if not m:
+for tile in soup.select("a[href]"):
+    # Find duration text sibling or child
+    # e.g. <span class="video-item__duration">2:11:08</span>
+    dur_el = tile.select_one(".video-item__duration")
+    if not dur_el:
         continue
-    ts_ms = int(m.group(1))
-    dt = datetime.datetime.utcfromtimestamp(ts_ms/1000).date()
-    url = a["href"]
-    full_url = url if url.startswith("http") else "https://www.afl.com.au" + url
-    candidates.append((dt.strftime("%Y-%m-%d"), full_url))
+    dur_text = dur_el.get_text(strip=True)
+    secs = parse_duration(dur_text)
+    # Keep only ≥ 1 hour
+    if secs >= 3600:
+        href = tile["href"]
+        full_url = href if href.startswith("http") else "https://www.afl.com.au" + href
+        candidates.append((dur_text, full_url))
 
-print(f"Found {len(candidates)} replay tiles in listing.")
+print(f"Found {len(candidates)} videos ≥ 1 hour from latest {limit} items.")
 
-# 5. Filter by your date
-links = [url for (d, url) in candidates if d == target_date]
-print(f"Matched {len(links)} replays on {target_date}.")
+if not candidates:
+    sys.exit("No replays ≥ 1 hour found.")
 
-if not links:
-    sys.exit("No replays found for that date or not published yet.")
-
-# 6. Download with yt-dlp
+# --- Download via yt-dlp ---
 ydl_opts = {
-    "outtmpl": os.path.join(DL_PATH, "%(title)s.%(ext)s"),
+    "outtmpl": os.path.join(DL_PATH, f"{label_date} - %(title)s.%(ext)s"),
     "format":  "bestvideo+bestaudio/best",
-    "noprogress": True
+    "noprogress": True,
 }
 
-for url in sorted(links):
-    print(f"\n→ yt-dlp downloading: {url}")
+for dur_text, url in candidates:
+    print(f"\n→ yt-dlp downloading ({dur_text}): {url}")
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
